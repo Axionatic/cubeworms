@@ -2,32 +2,39 @@
 // https://creativecommons.org/licenses/by-sa/4.0/
 
 // mess with these to change the sketch's behaviour
+
+// === Colour ===
+final int MAX_H = 360; // HSB hue maximum (colour mode is HSB 360/100/100/100 throughout)
+final int MAX_SBA = 100; // HSB saturation/brightness/alpha maximum
+
+// === Input & Display ===
 final float MOUSE_SENSITIVITY = 0.01; // affects click and drag to rotate
-final int MAX_H = 360; // probably shouldn't change this...
-final int MAX_SBA = 100; // ...or this
 final int INIT_ZOOM = 16; // initial zoom (remember this will be multiplied by ZOOM_STEP!)
 final float ZOOM_STEP = 0.0625; // how much we zoom in/out by on mouse wheel
 final int MIN_ZOOM = 1; // minimum zoom level
 final int MAX_ZOOM = 160; // maximum zoom level
+
+// === Render / Graphics ===
 final float BRIGHT_PASS = 0.0001; //***MUST*** be a float! (Aparrently glsl can't...)
 final int BLUR_SIZE = 15; // ***MUST*** be an int! (... do implicit type conversion...)
 final float BLUR_SIGMA = 20f; // ***MUST*** be a float! (... between int and float)
+final int BACKGROUND = 0; // background colour
+final int D_LIGHT = 255; // strength of directional light shining on cubeworms
+final int SHININESS = 25; // cubeworm shininess
+final int GLOW_STRENGTH = 3; // number of times blur is added to sketch
+
+// === Geometry ===
+final int GRAV_PWR = 10000; // we use a kind of inverted gravity to contain worms
+final int WALL_RAD = 1500; // radius of gravitationally repulsive sphere "wall"
+final float SKETCH_Z = WALL_RAD * -1.5; // Z position of sketch (so that the camera isn't inside the grav wall)
 float CAMERA_Z = 0; // Z-pos of camera, calculated in sketch setup
+final int NEAR_CLIP_DIVISOR = 10; // Processing default: near clip plane = camera_z - camera_z/10
 float HITHER = 0; // hither/near face of view frustum, calculated in sketch setup
 final float FOV_Y = PI / 3; // default processing value for vertical field-of-view angle
 float B_F_Y_LEN = 0; // y-length of view frustum at beacon z-pos. Calculated at runtime
 float B_F_X_LEN = 0; // x-length of view frustum at beacon z-pos. Calculated at runtime
 
-// environment properties
-final int BACKGROUND = 0; // background colour
-final int D_LIGHT = 255; // strength of directional light shining on cubeworms
-final int SHININESS = 25; // cubeworm shininess
-final int GLOW_STRENGTH = 3; // number of times blur is added to sketch
-final int GRAV_PWR = 10000; // we use a kind of inverted gravity to contain worms
-final int WALL_RAD = 1500; // radius of gravitationally repulsive sphere "wall"
-final float SKETCH_Z = WALL_RAD * -1.5; // Z position of sketch (so that the camera isn't inside the grav wall)
-
-// beacon properties
+// === Beacon ===
 final int BEACON_CORE = 20; // radius of sphere at core of beacon
 final int B_SPAWN_LEN = 45; // duration of beacon core spawn animation
 final int B_SPHERE_DETAIL = 8; // sphere detail settings for beacon
@@ -45,7 +52,7 @@ final float B_CORE_REPULSE = -0.0006; // modifier for how strongly cubeworms are
 final float B_HERD_STR = 0.00025; // how strongly worms are pushed back to near side of beacon if they stray too far
 final int P_COUNT = 180; // number of particles orbiting beacon
 
-// particle propterties
+// === Particles ===
 final float P_RADIUS = 12; // radius of particle
 final int P_LONGRES = 4; // longitudinal sphere detail setting for particles
 final int P_LATRES = 1; // latitudinal sphere detail setting for particles
@@ -68,7 +75,7 @@ final int P_MAX_DET_PATH_LEN = 10; // maximum number of positions on detonation 
 final float P_DET_MIN_POS_MOD = -50; // minimum position modifier for detonation path positions
 final float P_DET_MAX_POS_MOD = 50; // maximum position modifier for detonation path positions
 
-// generic cubeworm properties
+// === Worms - General ===
 final int WORM_COUNT = 15; // number of cubeworms
 final int WORM_SIZE = 75; // size of worm's main cube
 final float MIN_SAT = MAX_SBA * 0.7; // minimum saturation of colours used for cubeworms
@@ -99,13 +106,11 @@ final float MAX_PULSE_SPEED = 0.05; // max speed at which cubeworms pulse
 final float MIN_HSB_LERP = 0.2; // min HSB fade speed
 final float MAX_HSB_LERP = 0.5; // max HSB fade speed
 
-// travelworm (hypno & recover) specific properties
-final float ATTR_STR = 0.25; // strength of attraction to destination pos
-
-// hypnoworm-specific properties
-final float LOOK_LIM_DIST_MOD = 0.2; // dist to beacon * this + vel * ↓ = radius around beacon worm looks at 
+// === Worms - Beacon Interaction ===
+final float ATTR_STR = 0.25; // strength of attraction to destination pos (travelworm)
+final float LOOK_LIM_DIST_MOD = 0.2; // dist to beacon * this + vel * ↓ = radius around beacon worm looks at
 final float LOOK_LIM_VEL_MOD = 15; // dist to beacon * ↑ + vel * this = radius around beacon worm looks at
-final float MAX_TURN_RATE = 0.1; // max turn rate = (desired facing - current facing) * this
+final float MAX_TURN_RATE = 0.1; // max turn rate = (desired facing - current facing) * this (hypnoworm)
 final float MIN_SURVIVAL_CHANCE = 0.6; // survival chance decreases with proximity to beacon detonation
 
 // pushworm-specific properties
@@ -162,7 +167,7 @@ final float FACETRAIL_DECAY = 0.5; // speed at which the trail left behind by ex
 // recoverworm-specific properties
 final float RECOVER_RAD = (WALL_RAD - MAX_SPAWN_RAD) * 0.8; // become roamworm once within this radius of recover dest
 
-// engine/thruster properties
+// === Engine / Thruster ===
 final float MIN_E_PWR = 0.05; // the minimum amplitude of a cosine engine
 final float MAX_E_PWR = 0.2; // the maximum amplitude of a cosine engine
 final int MIN_E_FUEL = 30; // the minimum period of a cosine engine
@@ -170,7 +175,7 @@ final int MAX_E_FUEL = 80; // the maximum period of a cosine engine
 final int MIN_REFUEL_TIME = 20; // minimum number of frames between engine burns
 final int MAX_REFUEL_TIME = 60; // maximum number of frames between engine burns
 
-// cubetrail properties
+// === Cube Trail ===
 final int T_MIN_RATE = 8; // minimum trailcube spawn frequency (1 every x frames)
 final int T_MAX_RATE = 1; // maximum trailcube spawn frequency (1 every x frames)
 final float T_DECAY = 1.2; // rate at which trailcubes shrink after spawning

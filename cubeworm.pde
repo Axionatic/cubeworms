@@ -55,9 +55,9 @@ public abstract class Cubeworm {
   }
   
   // angle theta between two vectors of common origin: cos(theta) = (v1 dot v2)/(|v1|*|v2|)
+  // clamp to [-1, 1] to guard against floating-point drift causing acos to return NaN
   float findTheta(PVector v1, PVector v2) {
-    float theta = PVector.dot(v1, v2) / (v1.mag() * v2.mag());
-    return acos(theta);
+    return acos(constrain(PVector.dot(v1, v2) / (v1.mag() * v2.mag()), -1.0, 1.0));
   }
   
   // project a given vector v2 onto another vector v1: proj = ((v1 dot v2) / |v1|^2) * v1
@@ -482,8 +482,7 @@ public class Hypnoworm extends Travelworm {
       // will the worm survive?
       float badLuck = random(0,1);
       if (badLuck > survivalChance) {
-        // uh oh...
-        // TODO: replace hard-coded state transition with a cleaner dispatch mechanism
+        // uh oh... worm transitions via subclass-replacement (the established pattern here)
         float enumLen = ExplodeType.values().length;
         ExplodeType chooseYourDestiny = ExplodeType.values()[round(random(-RANDOM_FIX, enumLen - RANDOM_FIX))];
         switch (chooseYourDestiny) {
@@ -507,39 +506,10 @@ public class Hypnoworm extends Travelworm {
   // hypnoworms don't always look directly at their velocity, depending on how close they are to the beacon
   PVector calcEulers() {
     gaze = vel; // look towards vel by default
-    // check if worm is fascinated by beacon
-    fascinated = distToDest < FASCINATE_RAD ? true : false;
-    
-    // fascinated worms are limited in how far away from the beacon they are allowed to face
+    fascinated = distToDest < FASCINATE_RAD;
     if (fascinated) {
-      destPlane = new PPlane(dest, toDest);
-      gaze = destPlane.findIntersect(pos,vel);
-      lookLimRad = (distToDest * LOOK_LIM_DIST_MOD) + (vel.mag() * LOOK_LIM_VEL_MOD);
-      
-      // Is the worm's gaze too far away from the beacon?
-      gaze = destPlane.findIntersect(pos, vel);
-      if (gaze != null) {
-        PVector gazeXsec = PVector.add(pos, gaze); // intersection between gaze & dest plane
-        PVector gazeDestDif = PVector.sub(dest, gazeXsec);
-        // if worm gaze too far away: limit gaze to circle around beacon with radius lookLimRad.
-        // use part of velocity vector parallel to dest plane for gaze because if worm is moving
-        // away from beacon (pos+vel) Xsec destPlane returns unhelpful backwards results
-        if (gazeDestDif.mag() > lookLimRad) {
-          // project vel onto toDest to get part of vel orthogonal to destPlane
-          PVector velOrtho = project(toDest, vel);
-          // subtract ortho component to get parallel component
-          PVector velParallel = PVector.sub(vel, velOrtho);
-          // normalise and multiply by lookLimRad to get position of gaze on destPlane
-          velParallel.normalize();
-          velParallel.mult(lookLimRad);
-          gaze = PVector.add(toDest, velParallel);
-        }
-      } else {
-        // 0 or infinite intersections (almost never happens, just keep prev gaze)
-        gaze = prevGaze;
-      }
+      calcAttractionGaze();
     }
-    
     // if we want to look in a new direction from last frame, interpolate smoothly
     if (gaze != prevGaze) {
       PVector gazeDiff = PVector.sub(gaze, prevGaze);
@@ -547,6 +517,30 @@ public class Hypnoworm extends Travelworm {
       gaze = PVector.add(prevGaze, gazeDiff);
     }
     return calcEulers(gaze);
+  }
+
+  // constrain gaze to a circle of radius lookLimRad around the beacon on the dest plane
+  private void calcAttractionGaze() {
+    destPlane = new PPlane(dest, toDest);
+    lookLimRad = (distToDest * LOOK_LIM_DIST_MOD) + (vel.mag() * LOOK_LIM_VEL_MOD);
+    gaze = destPlane.findIntersect(pos, vel);
+    if (gaze != null) {
+      PVector gazeXsec = PVector.add(pos, gaze); // intersection between gaze & dest plane
+      PVector gazeDestDif = PVector.sub(dest, gazeXsec);
+      // if gaze too far from beacon: clamp to lookLimRad circle on destPlane.
+      // use velocity's component parallel to destPlane because if worm is moving away from
+      // beacon, (pos+vel) Xsec destPlane gives unhelpful backwards results
+      if (gazeDestDif.mag() > lookLimRad) {
+        PVector velOrtho = project(toDest, vel); // component of vel orthogonal to destPlane
+        PVector velParallel = PVector.sub(vel, velOrtho); // component parallel to destPlane
+        velParallel.normalize();
+        velParallel.mult(lookLimRad);
+        gaze = PVector.add(toDest, velParallel);
+      }
+    } else {
+      // parallel or coincident ray (almost never happens): keep previous gaze
+      gaze = prevGaze;
+    }
   }
   
   // hypnoworms are attracted to the beacon - but don't get too close!

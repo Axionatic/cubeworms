@@ -90,7 +90,8 @@ public class Beacon {
     detPerc = 0;
     alpha = MAX_SBA;
     
-    // calculate position of cap of attraction sphere, that worms will try to stay on the surface of
+    // capPos: B_CAP_H units from the beacon toward the origin, centering the attractive
+    // spherical cap on the side of the beacon facing (0,0,0)
     capPos = PVector.mult(pos, -1);
     capPos.normalize();
     capPos.mult(B_CAP_H);
@@ -135,8 +136,8 @@ public class Beacon {
     // cross product of plane described by inital and target orientation vectors = normal vector (axis)
     PVector axis = init.cross(v);
     // angle theta between initial and target orientations: cos(theta) = (a dot b)/(|a|*|b|)
-    float theta = PVector.dot(init, v) / (init.mag() * v.mag());
-    theta = acos(theta);
+    // clamp to [-1, 1] to guard against floating-point drift causing acos to return NaN
+    float theta = acos(constrain(PVector.dot(init, v) / (init.mag() * v.mag()), -1.0, 1.0));
     Quaternion facing = new Quaternion(theta, axis);
     
     // beacon rotates around position vector, stopping during detonation

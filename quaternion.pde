@@ -32,7 +32,7 @@ public float x, y, z, w;
       return new Quaternion(x, y, z, w);
   }
   
-  public boolean equal(Quaternion q) {
+  public boolean equals(Quaternion q) {
       return x == q.x && y == q.y && z == q.z && w == q.w;
   }
   
@@ -111,10 +111,10 @@ public float x, y, z, w;
     return new PVector(roll, pitch, yaw);
   }
   
-  // return rotation represented as an angle around an axis. Suffers somewhat from floating point errors :-/
+  // return rotation represented as an angle around an axis
   public AngleAxis getAngleAxis() {
-    if ((x == 0) && (y == 0) && (z == 0) && (w == 1)) {
-      // quarternion is all shiny and new. Let's just say we are rotating around Y by 0
+    if (abs(x) < 0.0001 && abs(y) < 0.0001 && abs(z) < 0.0001 && abs(w - 1) < 0.0001) {
+      // quaternion is identity. Rotate around Y by 0 as a safe default
       return new AngleAxis(0, new PVector(0,1,0));
     } else {
       float angle = acos(w) * 2;

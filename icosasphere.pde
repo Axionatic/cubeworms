@@ -24,7 +24,7 @@ public class Icosasphere {
     PVector rearTop = new PVector(0, -phi, -1);
     PVector forwardBottom = new PVector(0, phi, 1);
     PVector rearBottom = new PVector(0, phi, -1);
-    // I want to loop but my feeble brain needs the variable names!
+    // Explicit variables rather than a loop to keep vertex names readable during debugging
     frontLeft.normalize();
     frontRight.normalize();
     backLeft.normalize();
@@ -38,7 +38,7 @@ public class Icosasphere {
     forwardBottom.normalize();
     rearBottom.normalize();
     
-    // Icosahedron has 20 faces. I spent ages staring at my D20 to get this right >_<
+    // Icosahedron has 20 faces.
     triangles = new Triangle[20];
     triangles[0] = new Triangle(rearTop, forwardTop, upperRight);
     triangles[1] = new Triangle(rearTop, upperRight, backRight);

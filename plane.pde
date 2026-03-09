@@ -26,21 +26,20 @@ public class PPlane {
   
   // find an intersection between plane and a vector starting at point p, travelling in direction v
   public PVector findIntersect(PVector p, PVector v) {
-    float f = (a * p.x) + (b * p.y) + (c * p.z); // f = constant part of equation
-    float t = (a * v.x) + (b * v.y) + (c * v.z); // solve for t to find intersect
-    
-    // TODO: better return types for 0 or infinite intersections
-    if (t == 0) {
-      if (f == d) {
-        // PVector lies on plane, infinite intersections
+    float num = (a * p.x) + (b * p.y) + (c * p.z); // numerator: position dot normal
+    float denom = (a * v.x) + (b * v.y) + (c * v.z); // denominator: direction dot normal
+
+    if (denom == 0) {
+      if (num == d) {
+        // ray is coincident with plane: infinite intersections
         return null;
       } else {
-        // no intersection
+        // ray is parallel to plane: no intersection
         return null;
-      } 
+      }
     } else {
-      // single intersection, solve for t
-      t = (d - f) / t;
+      // single intersection: solve parametric ray equation for t
+      float t = (d - num) / denom;
       return PVector.mult(v, t);
     }
   }

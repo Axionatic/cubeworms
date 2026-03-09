@@ -32,7 +32,7 @@ public class Engine {
   int fuel; // frames of engine burn remaining
   int maxF; // maximum/starting fuel (number of burn frames) - period of cosine wave
   float maxB; // how hard the engine pushes at maximum burn - amplitude of cosine wave (can be negative!)
-  int refuelTime; // how long refuelling takes (but where does the fuel come from!?)
+  int refuelTime; // frames to wait after fuel runs out before engine burns again
   
   public Engine() {
     reset();

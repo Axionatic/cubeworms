@@ -3,7 +3,6 @@
 
 // Particles that make up the beacon (aside from the core, which is just a sphere)
 public class Particle {
-  //int id; // id of particle & position in particle array
   Point head; // "head" of particle
   Point[] trail; // trail of points left behind particle
   float yRot; // rotation around centre of beacon in Y (initial facing (1,0,0))
@@ -43,7 +42,7 @@ public class Particle {
         // start by finding current step on the path, and percentage way through that step
         float stepPerc = beacon.detPerc * (detPath.length-1);
         int pathStep = int(stepPerc);
-        int pathNext = pathStep + 1;
+        int pathNext = min(pathStep + 1, detPath.length - 1);
         stepPerc -= pathStep;
         // then feed data into curvePoint() to get current position
         PVector basePos = detPath[pathStep];

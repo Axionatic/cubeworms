@@ -20,7 +20,7 @@ void setup() {
   frameRate(60);
   colorMode(HSB, MAX_H, MAX_SBA, MAX_SBA, MAX_SBA);
   CAMERA_Z = (height/2.0) / tan(PI*60.0/360.0); // default processing camera z-pos
-  HITHER = CAMERA_Z - (CAMERA_Z / 10); // default processing hither/near z-pos of view frustum
+  HITHER = CAMERA_Z - (CAMERA_Z / NEAR_CLIP_DIVISOR); // default processing hither/near z-pos of view frustum
   BEACON_Z = SKETCH_Z + WALL_RAD; // Beacon pos is BEACON_Z_PERC % between near point of wall & hither
   BEACON_Z = WALL_RAD + (HITHER - BEACON_Z) * BEACON_Z_PERC;
   BEACON_Z -= BEACON_CORE / 2;
@@ -72,32 +72,14 @@ void draw() {
   }
   
   // draw faces
-  faces.beginDraw();
-  faces.colorMode(HSB, MAX_H, MAX_SBA, MAX_SBA, MAX_SBA);
-  faces.ellipseMode(RADIUS);
-  faces.background(BACKGROUND, MAX_SBA);
-  faces.noStroke();
-  faces.lightSpecular(0, 0, MAX_SBA);
-  faces.directionalLight(D_LIGHT, D_LIGHT, D_LIGHT, 0, 0, -1);
-  faces.shininess(SHININESS);
-  faces.pushMatrix();
-    translateRotateScale(faces, eulers);
-    
+  beginSceneBuffer(faces, true);
     for (int i = 0; i < WORM_COUNT; i++) {
       worms[i].displayFaces(faces);
     }
-  faces.popMatrix();
-  faces.endDraw();
-  
+  endSceneBuffer(faces);
+
   // draw vertices
-  // seems inefficient to duplicate a lot of this :-/
-  vertices.beginDraw();
-  vertices.colorMode(HSB, MAX_H, MAX_SBA, MAX_SBA, MAX_SBA);
-  vertices.ellipseMode(RADIUS);
-  vertices.background(BACKGROUND, 0);
-  vertices.fill(0, 0, 0, MAX_SBA); // black fill to occlude rear vertices
-  vertices.pushMatrix();
-    translateRotateScale(vertices, eulers);
+  beginSceneBuffer(vertices, false);
     vertices.sphereDetail(P_LONGRES, P_LATRES); // some worms use little spheres
     for (int i = 0; i < WORM_COUNT; i++) {
       worms[i].displayVertices(vertices);
@@ -106,8 +88,7 @@ void draw() {
       beacon.update();
       beacon.display(vertices);
     }
-  vertices.popMatrix();
-  vertices.endDraw();
+  endSceneBuffer(vertices);
   
   // bright pass
   brightPass.beginDraw();
@@ -158,10 +139,37 @@ PVector calcRotation() {
     return rot.eulers();
 }
 
+// Prepare a 3D scene buffer for drawing this frame, then push/translate/rotate.
+// lit=true: apply directional lighting (for face rendering).
+// lit=false: opaque black fill to occlude rear geometry (for vertex/glow rendering).
+void beginSceneBuffer(PGraphics pg, boolean lit) {
+  pg.beginDraw();
+  pg.colorMode(HSB, MAX_H, MAX_SBA, MAX_SBA, MAX_SBA);
+  pg.ellipseMode(RADIUS);
+  if (lit) {
+    pg.background(BACKGROUND, MAX_SBA);
+    pg.noStroke();
+    pg.lightSpecular(0, 0, MAX_SBA);
+    pg.directionalLight(D_LIGHT, D_LIGHT, D_LIGHT, 0, 0, -1);
+    pg.shininess(SHININESS);
+  } else {
+    pg.background(BACKGROUND, 0);
+    pg.fill(0, 0, 0, MAX_SBA);
+  }
+  pg.pushMatrix();
+  translateRotateScale(pg, eulers);
+}
+
+void endSceneBuffer(PGraphics pg) {
+  pg.popMatrix();
+  pg.endDraw();
+}
+
 // apply the current rotation & scale to a PGraphics object
 void translateRotateScale(PGraphics pg, PVector eulers) {
   pg.translate(width/2, height/2, SKETCH_Z);
-  pg.rotateZ(eulers.z); // TODO: understand and document why this rotation order is correct
+  // Z→Y→X intrinsic rotation order matches the ZYX Tait-Bryan decomposition used in Quaternion.eulers()
+  pg.rotateZ(eulers.z);
   pg.rotateY(eulers.y);
   pg.rotateX(eulers.x);
   pg.scale(sketchScale * ZOOM_STEP);

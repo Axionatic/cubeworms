@@ -24,7 +24,7 @@ uniform float sigma;        // The sigma value for the gaussian function: higher
                             // A good value for 5x5 is around 2 to 3.5
                             // ... play around with this based on what you need <span class="Emoticon Emoticon1"><span>:)</span></span>
  
-const float pi = 3.14159265;
+const float pi = acos(-1.0);
  
 void main() {  
   float numBlurPixelsPerSide = float(blurSize / 2); 

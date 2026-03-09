@@ -40,7 +40,7 @@ public class ColourCycler {
     }
   }
 
-  // for once accessors make sense, they'll make my code simpler!
+  // accessors allow field name reuse between ColourCycler and Fader
   public float faceHue() {return faceHue.val;}
   public float faceSat() {return faceSat.val;}
   public float vertHue() {return vertHue.val;}
