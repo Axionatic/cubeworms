@@ -6,12 +6,12 @@
  * 1) both faces and vertices have the same min/max hue & saturation
  * 2) faces have fixed brightness */
 public class ColourCycler {
-  float minH, maxH; // min/max hue
-  float minS, maxS; // min/max saturation
-  float minVertBright, maxVertBright; // min/max vertices brightness
-  Fader faceHue, faceSat; // face colour
-  Fader vertHue, vertSat, vertBright; // vertice colour
-  Fader[] faders; // easier to process the cyclers this way
+  private float minH, maxH; // min/max hue
+  private float minS, maxS; // min/max saturation
+  private float minVertBright, maxVertBright; // min/max vertices brightness
+  private Fader faceHue, faceSat; // face colour
+  private Fader vertHue, vertSat, vertBright; // vertex colour
+  private Fader[] faders; // easier to process the cyclers this way
 
   // Cycler needs to know limits for HSB values
   public ColourCycler(float minH, float maxH,
@@ -50,10 +50,10 @@ public class ColourCycler {
 
 // for ColourCycler - fade between random values in a give range
 public class Fader {
-  float min, max; // minimum and maximum allowed values
-  float val, target; // current & target values
-  float delta; // value change per frame
-  int steps; // number of steps to get to target
+  private float min, max; // minimum and maximum allowed values
+  private float val, target; // current & target values
+  private float delta; // value change per frame
+  private int steps; // number of steps to get to target
 
   public Fader(float min, float max) {
     this.min = min;

@@ -4,7 +4,7 @@
 // simple class to represent a plane. "P"Plane because processing already has "P"Vector
 // https://www.khanacademy.org/math/linear-algebra/vectors-and-spaces/dot-cross-products/v/defining-a-plane-in-r3-with-a-point-and-normal-vector
 public class PPlane {
-  float a, b, c, d; // for  plane representation (ax + by +cz = d)
+  private float a, b, c, d; // for plane representation (ax + by + cz = d)
   
   // simplest way to define a plane
   public PPlane (PVector point, PVector normal) {

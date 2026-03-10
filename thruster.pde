@@ -3,7 +3,7 @@
 
 // provide random thrust to cubeworms in XYZ via 3 engine objects
 public class Thruster {
-  Engine x, y, z; // engines for each axis
+  private Engine x, y, z; // engines for each axis
   
   public Thruster() {
     x = new Engine();
@@ -13,13 +13,13 @@ public class Thruster {
   
   // sometimes we want to begin by thrusting in a certain direction
   public Thruster(PVector v) {
-    float maxThrust = random(MIN_E_PWR, MAX_E_PWR);
-    int thrustLen = round(random(MIN_E_FUEL, MAX_E_FUEL));
-    v.normalize();
-    
-    x = new Engine(thrustLen, maxThrust * v.x);
-    y = new Engine(thrustLen, maxThrust * v.y);
-    z = new Engine(thrustLen, maxThrust * v.z);
+    float maxThrust = random(MIN_ENGINE_POWER, MAX_ENGINE_POWER);
+    int thrustLen = round(random(MIN_ENGINE_FUEL, MAX_ENGINE_FUEL));
+    PVector dir = v.normalize(null); // defensive copy to avoid mutating caller's vector
+
+    x = new Engine(thrustLen, maxThrust * dir.x);
+    y = new Engine(thrustLen, maxThrust * dir.y);
+    z = new Engine(thrustLen, maxThrust * dir.z);
   }
   
   public PVector run() {
@@ -29,36 +29,36 @@ public class Thruster {
 
 // provides thrust in single axis governed by cosine wave
 public class Engine {
-  int fuel; // frames of engine burn remaining
-  int maxF; // maximum/starting fuel (number of burn frames) - period of cosine wave
-  float maxB; // how hard the engine pushes at maximum burn - amplitude of cosine wave (can be negative!)
-  int refuelTime; // frames to wait after fuel runs out before engine burns again
+  private int fuel; // frames of engine burn remaining
+  private int maxFuel; // maximum/starting fuel (number of burn frames) - period of cosine wave
+  private float maxBurn; // how hard the engine pushes at maximum burn - amplitude of cosine wave (can be negative!)
+  private int refuelTime; // frames to wait after fuel runs out before engine burns again
   
   public Engine() {
     reset();
   }
   
   // sometimes we want to specify the parameters of our engine's first burn
-  public Engine(int maxF, float maxB) {
-    this.maxF = this.fuel = maxF; 
-    this.maxB = maxB;
+  public Engine(int maxFuel, float maxBurn) {
+    this.maxFuel = this.fuel = maxFuel; 
+    this.maxBurn = maxBurn;
     refuelTime = round(random(MIN_REFUEL_TIME, MAX_REFUEL_TIME));
   }
   
   private void reset() {
-    maxF = round(random(MIN_E_FUEL, MAX_E_FUEL));
-    maxB = random(MIN_E_PWR, MAX_E_PWR);
-    maxB *= random(1) >= 0.5 ? 1 : -1;
+    maxFuel = round(random(MIN_ENGINE_FUEL, MAX_ENGINE_FUEL));
+    maxBurn = random(MIN_ENGINE_POWER, MAX_ENGINE_POWER);
+    maxBurn *= MathUtils.randomSign();
     refuelTime = round(random(MIN_REFUEL_TIME, MAX_REFUEL_TIME));
-    fuel = maxF;
+    fuel = maxFuel;
   }
   
   public float burn() {
     // fire the engine! ...If we still have fuel - otherwise refuel
     if (fuel > 1) {
       fuel--;
-      // this formula is written so that the wave goes 0,0 -> maxF/2, maxT -> maxF, 0
-      return ((cos(fuel/(maxF/TWO_PI) + PI) + 1) / 2) * maxB;
+      // this formula is written so that the wave goes 0,0 -> maxFuel/2, maxT -> maxFuel, 0
+      return ((cos(fuel/(maxFuel/TWO_PI) + PI) + 1) / 2) * maxBurn;
     }
     else if (refuelTime > 0) {
       refuelTime--;

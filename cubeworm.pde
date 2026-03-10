@@ -3,15 +3,17 @@
 
 // cubeworms float around, propelled by thrusters and repulsed by anti-grav wall. Starts life by fading into existence
 public abstract class Cubeworm {
-  int id; // index in cubeworm array
-  ColourCycler cols; // cubeworm colours
-  PVector pos, rot, vel; // position, rotation, velocity
-  ArrayList<Trailcube> trail; // trailcubes
-  int nextTrailcube; // number of frames until we spawn the next trailcube
-  int facecubes; // number of facecubes (small cubes around the cubeworm)
-  float strokeW; // stroke width for glowy light pulse
+  private int id; // index in cubeworm array
+  protected ColourCycler cols; // cubeworm colours
+  protected PVector pos, rot, vel; // position, rotation, velocity
+  protected ArrayList<Trailcube> trail; // trailcubes
+  protected int nextTrailcube; // number of frames until we spawn the next trailcube
+  protected int facecubes; // number of facecubes (small cubes around the cubeworm)
+  protected float strokeW; // stroke width for glowy light pulse
   
-  // copy constructor
+  // Copy constructor — intentionally shallow. This is an ownership-transfer pattern: the caller
+  // immediately replaces worms[id] with the new subclass instance (e.g. worms[id] = new Hypnoworm(this)),
+  // so the old instance is discarded and aliasing the shared references is safe.
   public Cubeworm (Cubeworm c) {
     this.id = c.id;
     this.cols = c.cols;
@@ -31,12 +33,14 @@ public abstract class Cubeworm {
     trail = new ArrayList<Trailcube>();
   }
   
+  protected int id() { return id; }
+
   // Cubeworm behaviour is implemented in each different sub-class
-  public void update() {}
+  public abstract void update();
   
   // most Cubeworms become hypnotised when the beacon is placed, although some ignore it
   public void beaconPlaced() {
-    worms[id] = new Hypnoworm(this);
+    worms[id()] = new Hypnoworm(this);
   }
   
   // only Hypnoworms are affected by beacon detonations
@@ -54,10 +58,8 @@ public abstract class Cubeworm {
     return q.eulers();
   }
   
-  // angle theta between two vectors of common origin: cos(theta) = (v1 dot v2)/(|v1|*|v2|)
-  // clamp to [-1, 1] to guard against floating-point drift causing acos to return NaN
   float findTheta(PVector v1, PVector v2) {
-    return acos(constrain(PVector.dot(v1, v2) / (v1.mag() * v2.mag()), -1.0, 1.0));
+    return MathUtils.findTheta(v1, v2);
   }
   
   // project a given vector v2 onto another vector v1: proj = ((v1 dot v2) / |v1|^2) * v1
@@ -80,45 +82,47 @@ public abstract class Cubeworm {
     if (nextTrailcube > 0) {
       nextTrailcube--;
     } else {
-      // randomise spawn location & size 
-      float spawnDist = random(T_MIN_SPAWN_DIST, T_MAX_SPAWN_DIST);
-      float spawnRad = random(0, T_MAX_SPAWN_RAD);
-      float spawnTheta = random(0, TWO_PI);
-      float trailSize = random(T_MIN_SIZE, T_MAX_SIZE);
-      // trailcube gets smaller the further away it is from being directly behind cubeworm
-      trailSize *= map(spawnRad, 0, T_MAX_SPAWN_RAD, 1, T_OFF_SIZE_MOD);
-      float yOff = sin(spawnTheta) * spawnRad * (random(0,1) < 0.5 ? 1 : -1);
-      float zOff = cos(spawnTheta) * spawnRad * (random(0,1) < 0.5 ? 1 : -1);
-      
-      // trailcube spawn pos: start with cubeworm velocity...
-      PVector spawnPos = vel.normalize(null); // (pass null to leave original pvector unchanged)
-      // ...and move in the opposite direction...
-      spawnPos.mult(-spawnDist);
-      // ...this offset should be relative to cubeworm current position...
-      spawnPos = PVector.add(pos, spawnPos);
-      // ...finally, move out from the cubeworm centre a bit (worms always face X+)
-      spawnPos.add(new PVector(0, yOff, zOff));
-      
-      // randomise colour, somewhat (I guess we can just use these modifiers twice)
-      float hDiff = random(0, T_MAX_HUE_DIFF) * (random(0,1) < 0.5 ? 1 : -1);
-      float sDiff = random(0, T_MAX_SAT_DIFF) * (random(0,1) < 0.5 ? 1 : -1);
-      float tFHue = constrain(cols.faceHue() + hDiff, 0, MAX_H);
-      float tFSat = constrain(cols.faceSat() + sDiff, 0, MAX_SBA);
-      float tVHue = constrain(cols.vertHue() + hDiff, 0, MAX_H);
-      float tVSat = constrain(cols.vertSat() + sDiff, 0, MAX_SBA);
-      color vertCol = color(tVHue, tVSat, cols.vertBright());
-      trail.add(new Trailcube(tFHue, tFSat, vertCol, spawnPos, rot.copy(), trailSize));
-      
-      // reset trailcube spawn countdown
+      float spawnDist = random(TRAIL_MIN_SPAWN_DIST, TRAIL_MAX_SPAWN_DIST);
+      float spawnRad = random(0, TRAIL_MAX_SPAWN_RAD);
+      float trailSize = random(TRAIL_MIN_SIZE, TRAIL_MAX_SIZE);
+      trailSize *= map(spawnRad, 0, TRAIL_MAX_SPAWN_RAD, 1, TRAIL_OFFSET_SIZE_MOD);
+
+      PVector spawnPos = calcTrailSpawnPos(spawnDist, spawnRad);
+      Trailcube tc = createTrailcube(spawnPos, trailSize);
+      trail.add(tc);
       nextTrailcube = trailSpawnDelay();
     }
+  }
+
+  // calculate a randomised spawn position behind the cubeworm
+  private PVector calcTrailSpawnPos(float spawnDist, float spawnRad) {
+    float spawnTheta = random(0, TWO_PI);
+    float yOff = sin(spawnTheta) * spawnRad * MathUtils.randomSign();
+    float zOff = cos(spawnTheta) * spawnRad * MathUtils.randomSign();
+    PVector spawnPos = vel.normalize(null);
+    spawnPos.mult(-spawnDist);
+    spawnPos = PVector.add(pos, spawnPos);
+    spawnPos.add(new PVector(0, yOff, zOff));
+    return spawnPos;
+  }
+
+  // create a trailcube with colour slightly randomised from cubeworm's current colour
+  private Trailcube createTrailcube(PVector spawnPos, float trailSize) {
+    float hDiff = random(0, TRAIL_MAX_HUE_DIFF) * MathUtils.randomSign();
+    float sDiff = random(0, TRAIL_MAX_SAT_DIFF) * MathUtils.randomSign();
+    float tFHue = constrain(cols.faceHue() + hDiff, 0, MAX_H);
+    float tFSat = constrain(cols.faceSat() + sDiff, 0, MAX_SBA);
+    float tVHue = constrain(cols.vertHue() + hDiff, 0, MAX_H);
+    float tVSat = constrain(cols.vertSat() + sDiff, 0, MAX_SBA);
+    color vertCol = color(tVHue, tVSat, cols.vertBright());
+    return new Trailcube(tFHue, tFSat, vertCol, spawnPos, rot.copy(), trailSize);
   }
   
   // trailcube spawn rate scales linearly with velocity
   int trailSpawnDelay() {
     float s  = vel.mag();
     // explodeWorms can return a negative number here. It's ok because we test (nextTrailcube > 0) 
-    return round(map(s, 0, MAX_SPEED, T_MIN_RATE, T_MAX_RATE));
+    return round(map(s, 0, MAX_SPEED, TRAIL_MIN_RATE, TRAIL_MAX_RATE));
   }
   
   // Prepare canvas to draw faces, but leave actual drawing implementation to subclasses
@@ -178,12 +182,12 @@ public abstract class Cubeworm {
 * Spawning subclcass - has quick animation for cubeworms when they spawn *
 **************************************************************************/
 public class Spawnworm extends Cubeworm {
-  int animFrame; // current frame of current step of spawn animation
-  AStep animStep; // current step of spawn animation
-  float facecubeGrow; // size of facecube for first step of spawn animation
-  float facecubeSplit; // after growing, facecubes split radially (2nd anim step)
-  float facecubeRot;// facecube rotation (3rd anim step)
-  float cubewormGrow; // size of cubeworm centre cube (3rd anim step)
+  private int animFrame; // current frame of current step of spawn animation
+  private AStep animStep; // current step of spawn animation
+  private float facecubeGrow; // size of facecube for first step of spawn animation
+  private float facecubeSplit; // after growing, facecubes split radially (2nd anim step)
+  private float facecubeRot; // facecube rotation (3rd anim step)
+  private float cubewormGrow; // size of cubeworm centre cube (3rd anim step)
   
   public Spawnworm(int id) {
     super(id);
@@ -218,7 +222,7 @@ public class Spawnworm extends Cubeworm {
   
   // run spawn animation
   public void update() {
-    float eQuart = easeQuartic(float(animFrame) / ANIM_STEP_LEN);
+    float eQuart = MathUtils.easeInOut(float(animFrame) / ANIM_STEP_LEN, 4);
     switch(animStep) {
       // first step of spawn animation: single facecube grows at centre
       case FACECUBE_GROW:
@@ -240,14 +244,14 @@ public class Spawnworm extends Cubeworm {
     // check if it's time to move to the next animation step
     animFrame++;
     if (animFrame == ANIM_STEP_LEN) {
-      animStep = animStep.nextStep();
+      animStep = animStep.nextStepOrNull();
       animFrame = 0;
       // if we have finished animating, convert to Roamworm/Hypnoworm (depending on beacon)
       if (animStep == null) {
-        if (beacon.active) {
-          worms[id] = new Hypnoworm(this);
+        if (beacon.isActive()) {
+          worms[id()] = new Hypnoworm(this);
         } else {
-          worms[id] = new Roamworm(this);
+          worms[id()] = new Roamworm(this);
         }
       }
     }
@@ -274,25 +278,15 @@ public class Spawnworm extends Cubeworm {
     pg.popMatrix();
   }
   
-  // quartic curve acceleration until half-way, then identical deceleration (returns 0 to 1)
-  private float easeQuartic (float perc) {
-    perc *= 2; // easy way to split anim percentage into 2 steps
-    if (perc < 1) {
-      return pow(perc, 4) / 2; // magic number 4 is for quartic (x^4)
-    } else {
-      perc--; // percentage into deceleration
-      return 1 - (pow(1-perc, 4) / 2);
-    }
-  }
 }
 
 /**************************************************************************
 * Roaming subclass - default state of cubeworms, just wandering around... *
 **************************************************************************/
 public class Roamworm extends Cubeworm {
-  Thruster thruster; // provides random movement to cubeworm
-  float pulseSpeed; // speed (period) of light pulse
-  float pulseAnim; // xpos on pulse animation sine wave
+  private Thruster thruster; // provides random movement to cubeworm
+  protected float pulseSpeed; // speed (period) of light pulse
+  private float pulseAnim; // xpos on pulse animation sine wave
   
   public Roamworm(Cubeworm c) {
     super(c);
@@ -323,9 +317,9 @@ public class Roamworm extends Cubeworm {
     moveAndRotate();
     glowPulse();
     cols.run();
-    updateTrail(true);
+    updateTrailWithSpawn();
   }
-  
+
   // motion for the worm - movement & rotation
   void moveAndRotate() {
     calcVelocity(); 
@@ -338,11 +332,19 @@ public class Roamworm extends Cubeworm {
     pulseAnim += pulseSpeed;
   }
   
-  // maybe spawn a trailcube, then process all trailcubes
-  void updateTrail(boolean spawnNew) {
-    if (spawnNew) {
-      spawnTrail();
-    }
+  // spawn a new trailcube and decay/remove existing ones
+  void updateTrailWithSpawn() {
+    spawnTrail();
+    decayTrail();
+  }
+
+  // decay/remove existing trailcubes without spawning new ones
+  void updateTrailNoSpawn() {
+    decayTrail();
+  }
+
+  // shrink all trailcubes and remove dead ones
+  private void decayTrail() {
     for (int i = trail.size() - 1; i >= 0; i--) {
       Trailcube t = trail.get(i);
       t.update();
@@ -386,8 +388,6 @@ public class Roamworm extends Cubeworm {
     return MAX_SPEED;
   }
   
-  // when beacon is detonated, either explode or recover depending on distance from beacon
-  
   // draw faces
   public void displayFaces(PGraphics pg) {
     pg.pushMatrix();
@@ -413,8 +413,8 @@ public class Roamworm extends Cubeworm {
 * Travelling subclass - for cubeworms that travel to a destination, ignoring the grav wall *
 *******************************************************************************************/
 public class Travelworm extends Roamworm {
-  PVector dest, toDest; // vectors representing travel destination and vector between our pos & the dest
-  float distToDest; // magnitude of toDest vector
+  protected PVector dest, toDest; // vectors representing travel destination and vector between our pos & the dest
+  protected float distToDest; // magnitude of toDest vector
   
   public Travelworm(Cubeworm c) {
     super(c);
@@ -446,15 +446,15 @@ public class Travelworm extends Roamworm {
 * Hypnotised subclass - for cubeworms that have been hypnotised by the beacon *
 ******************************************************************************/
 public class Hypnoworm extends Travelworm {
-  PPlane destPlane; // plane orthongonal to toDest vector at beacon location
-  PVector gaze; // vector representing direction worm is facing. vel by default, modified when fascinated
-  PVector prevGaze; // direction worm faced in previous frame - so we can interpolate
-  float lookLimRad; // radius of circle that worm must look at, shrinks with distance to beacon
-  boolean fascinated; // worms within a certain distance of the beacon become fascinated, unable to look away
+  private PPlane destPlane; // plane orthogonal to toDest vector at beacon location
+  private PVector gaze; // vector representing direction worm is facing. vel by default, modified when fascinated
+  private PVector prevGaze; // direction worm faced in previous frame - so we can interpolate
+  private float lookLimRad; // radius of circle that worm must look at, shrinks with distance to beacon
+  private boolean fascinated; // worms within a certain distance of the beacon become fascinated, unable to look away
   
   public Hypnoworm(Cubeworm c) {
     super(c);
-    dest = beacon.pos;
+    dest = beacon.pos();
     gaze = vel;
     prevGaze = vel;
     destPlane = new PPlane();
@@ -468,7 +468,7 @@ public class Hypnoworm extends Travelworm {
     calcToDest();
     glowPulse();
     cols.run();
-    updateTrail(true);
+    updateTrailWithSpawn();
     prevGaze = gaze;
   }
   
@@ -478,7 +478,7 @@ public class Hypnoworm extends Travelworm {
   // hypnoworms will either explode or recover, depending on distance to beacon and luck
   public void beaconDetonated() {
     if (fascinated) {
-      float survivalChance = map(distToDest, FASCINATE_RAD, B_ATTR_RAD, 1, MIN_SURVIVAL_CHANCE);
+      float survivalChance = map(distToDest, FASCINATE_RADIUS, BEACON_ATTRACT_RADIUS, 1, MIN_SURVIVAL_CHANCE);
       // will the worm survive?
       float badLuck = random(0,1);
       if (badLuck > survivalChance) {
@@ -487,26 +487,26 @@ public class Hypnoworm extends Travelworm {
         ExplodeType chooseYourDestiny = ExplodeType.values()[round(random(-RANDOM_FIX, enumLen - RANDOM_FIX))];
         switch (chooseYourDestiny) {
           case SPLITWORM:
-            worms[id] = new Splitworm(this);
+            worms[id()] = new Splitworm(this);
             break;
-            
+
           case EXPLODEWORM:
-            worms[id] = new Explodeworm(this);
+            worms[id()] = new Explodeworm(this);
             break;
         }
       } else {
         // phew, got away with it!
-        worms[id] = new Pushworm(this);
+        worms[id()] = new Pushworm(this);
       }
     } else {
-      worms[id] = new Recoverworm(this);
+      worms[id()] = new Recoverworm(this);
     }
   }
   
   // hypnoworms don't always look directly at their velocity, depending on how close they are to the beacon
   PVector calcEulers() {
     gaze = vel; // look towards vel by default
-    fascinated = distToDest < FASCINATE_RAD;
+    fascinated = distToDest < FASCINATE_RADIUS;
     if (fascinated) {
       calcAttractionGaze();
     }
@@ -545,35 +545,36 @@ public class Hypnoworm extends Travelworm {
   
   // hypnoworms are attracted to the beacon - but don't get too close!
   PVector modAcceleration() {
-    // once fascinated by the beacon, modify acceleration so that worms slow down and try to stay
-    // on the surface of an invisible spherical cap between the beacon and (0,0,0)
-    if (fascinated) {
-      PVector capAttract = super.modAcceleration();
-      // first ensure that worms stay roughly on the surface of sphere surrounding the beacon
-      if (distToDest < B_ATTR_RAD) {
-        PVector repulse = PVector.mult(toDest, B_ATTR_RAD/distToDest * B_CORE_REPULSE);
-        capAttract.add(repulse);
-      }
-      
-      // next, if worms are outside cap radius OR on far side of cap plane, push them to sphere pt nearest (0,0,0)
-      PVector capPlaneXsec = beacon.capPlane.findIntersect(pos, dest);
-      if (capPlaneXsec != null) { // null means no intersection or infinite intersections (indistinguishable); skip herd push
-        // distance between beacon cap plane and worm
-        PVector capPlaneBDist = PVector.sub(dest, PVector.add(pos, capPlaneXsec));
-        if ((capPlaneBDist.mag() > beacon.capRad) || (!vectorsSignsEqual(dest, capPlaneXsec))) {
-          float bPosMag = beacon.pos.mag();
-          // find point on beacon attract sphere closest to (0,0,0)
-          PVector bSphereNearPt = PVector.mult(beacon.pos, (bPosMag - B_ATTR_RAD) / bPosMag);
-          // force vector pushing worms back to said point...
-          PVector nearPtAttract = PVector.sub(bSphereNearPt, pos);
-          nearPtAttract.mult(B_HERD_STR);
-          capAttract.add(nearPtAttract);
-        }
-      }
-      return capAttract;
+    if (!fascinated) {
+      return super.modAcceleration();
     }
-    // normal rules apply for worms that are not fascinated
-    return super.modAcceleration();
+    // fascinated: slow down and try to stay on the spherical cap between beacon and (0,0,0)
+    PVector capAttract = super.modAcceleration();
+    addCoreRepulsion(capAttract);
+    addHerdForce(capAttract);
+    return capAttract;
+  }
+
+  // repulse worms that get too close to the beacon core
+  private void addCoreRepulsion(PVector accel) {
+    if (distToDest < BEACON_ATTRACT_RADIUS) {
+      PVector repulse = PVector.mult(toDest, BEACON_ATTRACT_RADIUS / distToDest * BEACON_CORE_REPULSE);
+      accel.add(repulse);
+    }
+  }
+
+  // push worms back toward the spherical cap if they stray outside it
+  private void addHerdForce(PVector accel) {
+    PVector capPlaneXsec = beacon.capPlane().findIntersect(pos, dest);
+    if (capPlaneXsec == null) { return; } // no intersection; skip herd push
+    PVector capPlaneBDist = PVector.sub(dest, PVector.add(pos, capPlaneXsec));
+    if ((capPlaneBDist.mag() > beacon.capRad()) || (!vectorsSignsEqual(dest, capPlaneXsec))) {
+      float bPosMag = beacon.pos().mag();
+      PVector bSphereNearPt = PVector.mult(beacon.pos(), (bPosMag - BEACON_ATTRACT_RADIUS) / bPosMag);
+      PVector nearPtAttract = PVector.sub(bSphereNearPt, pos);
+      nearPtAttract.mult(BEACON_HERD_STRENGTH);
+      accel.add(nearPtAttract);
+    }
   }
   
   // check whether the x/y/z components of two vectors have the same signs (+, -, 0)
@@ -601,7 +602,7 @@ public class Hypnoworm extends Travelworm {
   // worms slow down as they approach the beacon
   float maxSpeed() {
     if (fascinated) {
-      return MAX_SPEED * (distToDest / FASCINATE_RAD);
+      return MAX_SPEED * (distToDest / FASCINATE_RADIUS);
     } else {
       return MAX_SPEED;
     }
@@ -612,15 +613,15 @@ public class Hypnoworm extends Travelworm {
 * Pushed subclass - for cubeworms that were hit by beacon detonation but just got pushed away *
 ***********************************************************************************************/
 public class Pushworm extends Roamworm {
-  float maxSpeed; // temporarily increased max speed
-  float resetSpeed; // when max speed slows to resetSpeed, convert to another type of worm
+  protected float maxSpeed; // temporarily increased max speed
+  protected float resetSpeed; // when max speed slows to resetSpeed, convert to another type of worm
   
   public Pushworm(Cubeworm c) {
     super(c);
     resetSpeed = MAX_SPEED;
     
     // calc force and direction of push
-    PVector expDir = PVector.sub(pos, beacon.pos);
+    PVector expDir = PVector.sub(pos, beacon.pos());
     float dirMag = expDir.mag();
     // calc speed...
     maxSpeed = 1 / dirMag;
@@ -639,10 +640,10 @@ public class Pushworm extends Roamworm {
   
   // when max speed has decayed to resetSpeed (MAX_SPEED), convert to another type of worm
   void convertWorm() {
-    if (beacon.active) {
-      worms[id] = new Hypnoworm(this);
+    if (beacon.isActive()) {
+      worms[id()] = new Hypnoworm(this);
     } else {
-      worms[id] = new Recoverworm(this);
+      worms[id()] = new Recoverworm(this);
     }
   }
   
@@ -667,13 +668,13 @@ public class Pushworm extends Roamworm {
 * Splitting subclass - for cubeworms that split into lots of small bits on beacon detonation *
 *********************************************************************************************/
 public class Splitworm extends Cubeworm {
-  Fragment[] fragments; // fragments of worm, blazing across the sky...
-  float speed;  // speed at which fragments travel
+  private Fragment[] fragments; // fragments of worm, blazing across the sky...
+  private float speed; // speed at which fragments travel
   public Splitworm(Cubeworm c) {
     super(c);
     
     // calc velocity (speed & direction)
-    PVector expDir = PVector.sub(pos, beacon.pos);
+    PVector expDir = PVector.sub(pos, beacon.pos());
     float dirMag = expDir.mag();
     speed = 1 / dirMag;
     speed = min(speed * PUSH_SPEED_MOD, MAX_SPLIT_SPEED);
@@ -701,10 +702,10 @@ public class Splitworm extends Cubeworm {
     
     // if all fragments have finished running, convert to a sleepworm
     if (!stillRunning) {
-      worms[id] = new Sleepworm(this);
+      worms[id()] = new Sleepworm(this);
     }
   }
-  
+
   // translate/rotate to cubeworm's initial pos, then display fragments
   public void displayFaces(PGraphics pg) {
     pg.pushMatrix();
@@ -893,7 +894,7 @@ public class Splitworm extends Cubeworm {
       trailRad[g] = 0;
       trailSpeed[g] = speed * G_INIT_SPEED_MOD;
       glimmerSpeed[g] = random(G_MIN_ANIM, G_MAX_ANIM);
-      glimmerCount[g] = round(G_BLINKS * glimmerSpeed[g] * random(G_B_MOD_MIN, G_B_MOD_MAX));
+      glimmerCount[g] = round(G_BLINKS * glimmerSpeed[g] * random(GLIMMER_BLINK_MOD_MIN, GLIMMER_BLINK_MOD_MAX));
       trailAnim[g] = G_BLINK_TIME;
     }
     
@@ -997,12 +998,11 @@ public class Splitworm extends Cubeworm {
 * Exploding subclass - for cubeworms that explode like fireworks after beacon detonation *
 *****************************************************************************************/
 public class Explodeworm extends Pushworm {
-  boolean exploding; // has the worm started to explode?
-  ExplodeSphere[] spheres; // the worm core explodes into several layers of spheres
-  float explodePerc; // percentage of explosion animation
-  boolean drawWorm; // do we actually draw the worm? (no, after explosion starts)
-  float faceCubeY; // y position of facecubes
-  ArrayList<TrailPoint> faceTrails; // facecube trails. The last object in the list is the actual facecube
+  private boolean exploding; // has the worm started to explode?
+  private ExplodeSphere[] spheres; // the worm core explodes into several layers of spheres
+  private float explodePerc; // percentage of explosion animation
+  private boolean drawWorm; // do we actually draw the worm? (no, after explosion starts)
+  private ArrayList<TrailPoint> faceTrails; // facecube trails. The last object in the list is the actual facecube
   
   public Explodeworm(Cubeworm c) {
     super(c);
@@ -1021,47 +1021,48 @@ public class Explodeworm extends Pushworm {
   
   public void update() {
     if (!exploding) {
-      // not exploding yet; decay speed & increase pulse frequency
       pulseSpeed += EXP_PULSE_INC;
       super.update();
+    } else if (explodePerc >= 1) {
+      updateExplosionFinished();
     } else {
-      int trailSize = faceTrails.size();
-      // first check if the explosion has already finished
-      if (explodePerc >= 1) {
-        // keep decaying remaining facecube trail points until we're all done
-        if (trailSize > 0) {
-          updateFaceTrails(true);
-        } else {
-          // put worm to sleep for a while before respawning
-          worms[id] = new Sleepworm(this);
-        }
-      } else {
-        // exploding! Update animation percentage and positions of stars in spheres
-        explodePerc = min(explodePerc + EXPLODE_SPEED, 1);
-        float easedPerc = easeOutCubic(explodePerc);
-        for (int i = 0; i < spheres.length; i++) {
-          spheres[i].update(explodePerc, easedPerc);
-        }
-        updateTrail(false); // false = don't spawn any new trailcubes
-        
-        // add to & update facecube trails. The last object in the list is the actual facecube
-        boolean addToTrail = frameCount % FACETRAIL_SPAWN_FREQ == 0;
-        float facecubeSize = FACECUBE_SIZE * invEaseInQuint(explodePerc);
-        if (addToTrail) {
-          TrailPoint p = new TrailPoint(FACECUBE_EXP_DIST * easedPerc, facecubeSize);
-          faceTrails.add(p);
-        } else {
-          // don't add a new trail point, just reset the data of the last point in trail
-          faceTrails.get(trailSize-1).reset(FACECUBE_EXP_DIST * easedPerc, facecubeSize);
-        }
-        updateFaceTrails(false);
-        
-        // when exploding, wait until stars are hiding the worm core then stop displaying it
-        if (drawWorm && spheres[spheres.length-1].r > WORM_SIZE / 2) {
-          drawWorm = false;
-        }
-      }
+      updateExplosionActive();
     }
+  }
+
+  // explosion finished: decay remaining facecube trails, then sleep
+  private void updateExplosionFinished() {
+    if (faceTrails.size() > 0) {
+      updateFaceTrails(true);
+    } else {
+      worms[id()] = new Sleepworm(this);
+    }
+  }
+
+  // explosion in progress: advance spheres, trails, and facecubes
+  private void updateExplosionActive() {
+    explodePerc = min(explodePerc + EXPLODE_SPEED, 1);
+    float easedPerc = MathUtils.easeOutCubic(explodePerc);
+    for (int i = 0; i < spheres.length; i++) {
+      spheres[i].update(explodePerc, easedPerc);
+    }
+    updateTrailNoSpawn();
+    updateExplodingFacecubes(easedPerc);
+    if (drawWorm && spheres[spheres.length - 1].r > WORM_SIZE / 2) {
+      drawWorm = false;
+    }
+  }
+
+  // update facecube positions and trails during explosion
+  private void updateExplodingFacecubes(float easedPerc) {
+    int trailSize = faceTrails.size();
+    float facecubeSize = FACECUBE_SIZE * invEaseInQuint(explodePerc);
+    if (frameCount % FACETRAIL_SPAWN_FREQ == 0) {
+      faceTrails.add(new TrailPoint(FACECUBE_EXP_DIST * easedPerc, facecubeSize));
+    } else {
+      faceTrails.get(trailSize - 1).reset(FACECUBE_EXP_DIST * easedPerc, facecubeSize);
+    }
+    updateFaceTrails(false);
   }
   
   // update TrailPoints in facecube trails
@@ -1093,11 +1094,6 @@ public class Explodeworm extends Pushworm {
       icosaRecurseCount = max(icosaRecurseCount - 1, 0); // don't try to recurse < 0 times!
     }
     exploding = true;
-  }
-  
-  // cubic ease out - start rapidly, finish slowly
-  private float easeOutCubic(float perc) {
-    return 1 - pow((1-perc), 3); // magic number 3 is for cube power
   }
   
   // inverted quintic ease in - start from 1, decrease slowly, finish rapidly at 0
@@ -1176,7 +1172,7 @@ public class Explodeworm extends Pushworm {
       this.initHue = curHue = initHue;
       this.s = s;
       this.b = b;
-      float targetHue = initHue + random(STAR_MIN_COL_DIFF, STAR_MAX_COL_DIFF) * (random(0,1) < 0.5 ? 1 : -1);
+      float targetHue = initHue + random(STAR_MIN_COL_DIFF, STAR_MAX_COL_DIFF) * MathUtils.randomSign();
       targetHue = HSBWrap(targetHue);
       // take most direct path to target hue, wrapping around 0 if necessary (actual wrapping happens in update())
       float forward, backward;
@@ -1276,7 +1272,7 @@ public class Recoverworm extends Travelworm {
     
     // is recovery complete? If so, convert back to roamworm
     if (distToDest < RECOVER_RAD) {
-      worms[id] = new Roamworm(this);
+      worms[id()] = new Roamworm(this);
     }
   }
 }
@@ -1285,7 +1281,7 @@ public class Recoverworm extends Travelworm {
 * Sleeping subclass - for cubeworms are resting before (re-)spawning *
 *********************************************************************/
 public class Sleepworm extends Cubeworm {
-  int sleepTime;
+  private int sleepTime;
   
   public Sleepworm(int id) {
     super(id);
@@ -1313,7 +1309,7 @@ public class Sleepworm extends Cubeworm {
   // keep sleeping until it is time to respawn
   public void update() {
     if (sleepTime <= 0) {
-      worms[id] = new Spawnworm(this);
+      worms[id()] = new Spawnworm(this);
     } else {
       sleepTime--;
     }
@@ -1333,13 +1329,13 @@ public enum AStep {
   FACECUBE_SPLIT,
   CUBEWORM_GROW {
     @Override
-    public AStep nextStep() {
+    public AStep nextStepOrNull() {
       return null; // there is no next value to increment to after CUBEWORM_GROW
     };
   };
   
   // increment the enum
-  public AStep nextStep() {
+  public AStep nextStepOrNull() {
     return values()[ordinal() + 1];
   }
 }

@@ -70,6 +70,9 @@ void draw() {
   for (int i = 0; i < WORM_COUNT; i++) {
     worms[i].update();
   }
+  if (beacon.isVisible()) {
+    beacon.update();
+  }
   
   // draw faces
   beginSceneBuffer(faces, true);
@@ -84,8 +87,7 @@ void draw() {
     for (int i = 0; i < WORM_COUNT; i++) {
       worms[i].displayVertices(vertices);
     }
-    if (beacon.displayed) {
-      beacon.update();
+    if (beacon.isVisible()) {
       beacon.display(vertices);
     }
   endSceneBuffer(vertices);
@@ -120,9 +122,6 @@ void draw() {
     image(vBlur,0,0);
   }
   blendMode(BLEND);
-  
-  fill(0, 0, MAX_SBA, MAX_SBA);
-  text(frameRate, 20, 20);
 }
 
 // use black quaternion magic to calculate X, Y, Z rotations for click & drag
@@ -199,8 +198,8 @@ void mouseDragged() {
 
 // place and detonate attractor beacon
 void mouseClicked() {
-  if ((mouseButton == LEFT) && (!beacon.detLock)) {
-    if (beacon.active) {
+  if ((mouseButton == LEFT) && (!beacon.isDetonating())) {
+    if (beacon.isActive()) {
       beacon.detonate();
     } else {
       // place beacon at pre-specified z-pos under mouse X/Y

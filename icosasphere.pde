@@ -5,8 +5,8 @@
 // and normalises up to a given recursion limit to create a sphere-like structure
 // https://stackoverflow.com/questions/7687148/drawing-sphere-in-opengl-without-using-glusphere
 public class Icosasphere {
-  Triangle[] triangles;
-  int recurseCount;
+  private Triangle[] triangles;
+  private int recurseCount;
   public Icosasphere(int recurseCount) {
     this.recurseCount = recurseCount;
     // icosahedron has 12 vertices

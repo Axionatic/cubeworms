@@ -27,6 +27,9 @@ final int GLOW_STRENGTH = 3; // number of times blur is added to sketch
 final int GRAV_PWR = 10000; // we use a kind of inverted gravity to contain worms
 final int WALL_RAD = 1500; // radius of gravitationally repulsive sphere "wall"
 final float SKETCH_Z = WALL_RAD * -1.5; // Z position of sketch (so that the camera isn't inside the grav wall)
+// CAMERA_Z, HITHER, BEACON_Z, B_F_Y_LEN, B_F_X_LEN depend on width/height which are only
+// available after fullScreen() is called, so they cannot be final. They are assigned once
+// in setup() and treated as constants thereafter.
 float CAMERA_Z = 0; // Z-pos of camera, calculated in sketch setup
 final int NEAR_CLIP_DIVISOR = 10; // Processing default: near clip plane = camera_z - camera_z/10
 float HITHER = 0; // hither/near face of view frustum, calculated in sketch setup
@@ -45,11 +48,11 @@ final float B_ROT_SPEED = TWO_PI / 240; // rotation speed of beacon core
 final int B_DET_FRAMES = 180; // detonation animation length in frames
 final float B_DET_RAD_MULT = 14; // radius multiplier for beacon core explosion animation
 final float B_DET_ROT_STOP = 0.66; // % of detonation animation by which beacon has stopped rotating
-final float B_ATTR_RAD = 500; // radius around beacon that cubeworms are attracted to. Limited to a spherical cap facing 0,0,0
-final float B_CAP_H = B_ATTR_RAD / 8; // "height" (offset from sphere pos) of spherical cap that cubeworms are attracted to
-final float FASCINATE_RAD = B_ATTR_RAD * 2; // worms within this radius of beacon become fascinated, unable to look away
-final float B_CORE_REPULSE = -0.0006; // modifier for how strongly cubeworms are repulsed from beacon core
-final float B_HERD_STR = 0.00025; // how strongly worms are pushed back to near side of beacon if they stray too far
+final float BEACON_ATTRACT_RADIUS = 500; // radius around beacon that cubeworms are attracted to. Limited to a spherical cap facing 0,0,0
+final float BEACON_CAP_HEIGHT = BEACON_ATTRACT_RADIUS / 8; // height (offset from sphere pos) of spherical cap that cubeworms are attracted to
+final float FASCINATE_RADIUS = BEACON_ATTRACT_RADIUS * 2; // worms within this radius of beacon become fascinated, unable to look away
+final float BEACON_CORE_REPULSE = -0.0006; // modifier for how strongly cubeworms are repulsed from beacon core
+final float BEACON_HERD_STRENGTH = 0.00025; // how strongly worms are pushed back to near side of beacon if they stray too far
 final int P_COUNT = 180; // number of particles orbiting beacon
 
 // === Particles ===
@@ -116,7 +119,7 @@ final float MIN_SURVIVAL_CHANCE = 0.6; // survival chance decreases with proximi
 // pushworm-specific properties
 final float SPEED_DECAY = 0.8; // rate at which worm slows down
 final float MAX_PUSH_SPEED = MAX_SPEED * 10; // maximum speed worms can be pushed to
-final float PUSH_SPEED_MOD = MAX_PUSH_SPEED / (1/B_ATTR_RAD); // speed = (1 / distance from beacon) * this
+final float PUSH_SPEED_MOD = MAX_PUSH_SPEED / (1/BEACON_ATTRACT_RADIUS); // speed = (1 / distance from beacon) * this
 
 // splitworm-specific properties
 final float MAX_SPLIT_SPEED = MAX_SPEED * 7; // maximum speed of splitworms 
@@ -140,8 +143,8 @@ final float G_BLINK_TIME = 45; // average number of frames a glimmer both blinks
 final float G_MIN_ANIM = 0.5; // glimmer minimum animation speed
 final float G_MAX_ANIM = 2; // glimmer maximum animation speed
 final float G_BLINKS = 4; // base number of times a glimmer will blink before modifiers
-final float G_B_MOD_MAX = 1.5; // maximum random modifier for number of times a glimmer will blink
-final float G_B_MOD_MIN = 0.5; // minimum random modifier for number of times a glimmer will blink
+final float GLIMMER_BLINK_MOD_MAX = 1.5; // maximum random modifier for number of times a glimmer will blink
+final float GLIMMER_BLINK_MOD_MIN = 0.5; // minimum random modifier for number of times a glimmer will blink
 final float G_INIT_SPEED_MOD = 0.5; // glimmer initial speed = fragment speed * this
 final float G_Y_SPEED_MOD = 0.2; // glimmer movement in Y = X movement * this
 final float G_SPEED_DECAY = 0.98; // glimmer speed decay per frame (speed *= this)
@@ -168,25 +171,25 @@ final float FACETRAIL_DECAY = 0.5; // speed at which the trail left behind by ex
 final float RECOVER_RAD = (WALL_RAD - MAX_SPAWN_RAD) * 0.8; // become roamworm once within this radius of recover dest
 
 // === Engine / Thruster ===
-final float MIN_E_PWR = 0.05; // the minimum amplitude of a cosine engine
-final float MAX_E_PWR = 0.2; // the maximum amplitude of a cosine engine
-final int MIN_E_FUEL = 30; // the minimum period of a cosine engine
-final int MAX_E_FUEL = 80; // the maximum period of a cosine engine
+final float MIN_ENGINE_POWER = 0.05; // the minimum amplitude of a cosine engine
+final float MAX_ENGINE_POWER = 0.2; // the maximum amplitude of a cosine engine
+final int MIN_ENGINE_FUEL = 30; // the minimum period of a cosine engine
+final int MAX_ENGINE_FUEL = 80; // the maximum period of a cosine engine
 final int MIN_REFUEL_TIME = 20; // minimum number of frames between engine burns
 final int MAX_REFUEL_TIME = 60; // maximum number of frames between engine burns
 
 // === Cube Trail ===
-final int T_MIN_RATE = 8; // minimum trailcube spawn frequency (1 every x frames)
-final int T_MAX_RATE = 1; // maximum trailcube spawn frequency (1 every x frames)
-final float T_DECAY = 1.2; // rate at which trailcubes shrink after spawning
-final float T_MIN_SIZE = 0.6 * WORM_SIZE; // min trailcube size
-final float T_MAX_SIZE = 0.85 * WORM_SIZE; // max trailcube size
-final float T_MAX_SPAWN_RAD = 1.3 * WORM_SIZE; // radius around center of worm in which trailcube spawn (min is 0)
-final float T_MIN_SPAWN_DIST = 5 + WORM_SIZE/2; // min distance behind cubeworm that trailcube can spawn
-final float T_MAX_SPAWN_DIST = 35 + WORM_SIZE/2; // max distance behind cubeworm that trailcube can spawn
-final float T_OFF_SIZE_MOD = 0.7; // the further a trailcube is from being directly behind a cubeworm, the smaller it gets
-final float T_MAX_HUE_DIFF = 30; // max difference between cubeworm hue and trailcube hue
-final float T_MAX_SAT_DIFF = 15; // max difference between cubeworm saturation and trailcube hue 
+final int TRAIL_MIN_RATE = 8; // minimum trailcube spawn frequency (1 every x frames)
+final int TRAIL_MAX_RATE = 1; // maximum trailcube spawn frequency (1 every x frames)
+final float TRAIL_DECAY = 1.2; // rate at which trailcubes shrink after spawning
+final float TRAIL_MIN_SIZE = 0.6 * WORM_SIZE; // min trailcube size
+final float TRAIL_MAX_SIZE = 0.85 * WORM_SIZE; // max trailcube size
+final float TRAIL_MAX_SPAWN_RAD = 1.3 * WORM_SIZE; // radius around centre of worm in which trailcubes spawn (min is 0)
+final float TRAIL_MIN_SPAWN_DIST = 5 + WORM_SIZE/2; // min distance behind cubeworm that trailcube can spawn
+final float TRAIL_MAX_SPAWN_DIST = 35 + WORM_SIZE/2; // max distance behind cubeworm that trailcube can spawn
+final float TRAIL_OFFSET_SIZE_MOD = 0.7; // the further a trailcube is from being directly behind a cubeworm, the smaller it gets
+final float TRAIL_MAX_HUE_DIFF = 30; // max difference between cubeworm hue and trailcube hue
+final float TRAIL_MAX_SAT_DIFF = 15; // max difference between cubeworm saturation and trailcube saturation
 
 /* Unfortunately, we can only use random with floats. However we need a fair
  * way of picking randomly from an array. If we had an array of size 3,

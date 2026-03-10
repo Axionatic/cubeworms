@@ -3,15 +3,15 @@
 
 // stationary cubes that make up the trail behind the cubeworms. Quickly shrink into nothing
 class Trailcube {
-  float faceH, faceS; // hue & saturation of faces
-  color vertC; // color of vertices
-  PVector pos, rot; // position & rotation
-  float size; // size (are these comments really that helpful?)
+  private float faceHue, faceSaturation; // hue & saturation of faces
+  private color vertexColour; // colour of vertices
+  private PVector pos, rot; // position & rotation
+  private float size;
 
-  public Trailcube(float faceH, float faceS, color vertC, PVector pos, PVector rot, float size) {
-    this.faceH = faceH;
-    this.faceS = faceS;
-    this.vertC = vertC;
+  public Trailcube(float faceHue, float faceSaturation, color vertexColour, PVector pos, PVector rot, float size) {
+    this.faceHue = faceHue;
+    this.faceSaturation = faceSaturation;
+    this.vertexColour = vertexColour;
     this.pos = pos;
     this.rot = rot;
     this.size = size;
@@ -19,14 +19,14 @@ class Trailcube {
 
   // trail slowly fades away
   public void update() {
-    size -= T_DECAY;
+    size -= TRAIL_DECAY;
   }
 
   // draw faces
   public void displayFaces(PGraphics pg) {
     applyTransform(pg);
-      pg.specular(faceH, faceS, MAX_SBA);
-      pg.fill(faceH, faceS, FACE_BRIGHTNESS, MAX_SBA);
+      pg.specular(faceHue, faceSaturation, MAX_SBA);
+      pg.fill(faceHue, faceSaturation, FACE_BRIGHTNESS, MAX_SBA);
       pg.box(size);
     pg.popMatrix();
   }
@@ -34,7 +34,7 @@ class Trailcube {
   // draw vertices
   public void displayVertices(PGraphics pg) {
     applyTransform(pg);
-      pg.stroke(vertC);
+      pg.stroke(vertexColour);
       pg.box(size);
     pg.popMatrix();
   }

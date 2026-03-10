@@ -3,15 +3,15 @@
 
 // Particles that make up the beacon (aside from the core, which is just a sphere)
 public class Particle {
-  Point head; // "head" of particle
-  Point[] trail; // trail of points left behind particle
-  float yRot; // rotation around centre of beacon in Y (initial facing (1,0,0))
-  float zRot; // rotation around centre of beacon in Z. Only from -HALF_PI to HALF_PI
-  float xAmp; // amplitude of sine wave governing particle x pos
-  float yAmp; // amplitude of sine wave governing particle y pos
-  int animFrame; // current animation frame
-  int sleepTime; // frames of "sleep" before particle is displayed
-  PVector[] detPath; // series of points particle curves around during detonation
+  private Point head; // "head" of particle
+  private Point[] trail; // trail of points left behind particle
+  private float yRot; // rotation around centre of beacon in Y (initial facing (1,0,0))
+  private float zRot; // rotation around centre of beacon in Z. Only from -HALF_PI to HALF_PI
+  private float xAmplitude; // amplitude of sine wave governing particle x pos
+  private float yAmplitude; // amplitude of sine wave governing particle y pos
+  private int animFrame; // current animation frame
+  private int sleepTime; // frames of "sleep" before particle is displayed
+  private PVector[] detPath; // series of points particle curves around during detonation
   
   public Particle(int id) {
     animFrame = P_SPAWN_FRAME;
@@ -28,71 +28,68 @@ public class Particle {
     // randomise movement
     yRot = (float(id) / P_COUNT) * TWO_PI; // particles are evenly distributed around beacon
     zRot = random(-QUARTER_PI, QUARTER_PI); // prevent beacon from just looking like magnetic field lines
-    xAmp = random(P_X_AMP_MIN, P_X_AMP_MAX);
-    yAmp = random(P_Y_AMP_MIN, P_Y_AMP_MAX) * -1; // downwards = y+ in processing
+    xAmplitude = random(P_X_AMP_MIN, P_X_AMP_MAX);
+    yAmplitude = random(P_Y_AMP_MIN, P_Y_AMP_MAX) * -1; // downwards = y+ in processing
   }
   
   public void update() {
     if (sleepTime > 0) {
       sleepTime--;
     } else {
-      // calc position/rotation/colour
-      if (beacon.detLock) {
-        // beacon is exploding, special rules apply: particle curves along detonation path
-        // start by finding current step on the path, and percentage way through that step
-        float stepPerc = beacon.detPerc * (detPath.length-1);
-        int pathStep = int(stepPerc);
-        int pathNext = min(pathStep + 1, detPath.length - 1);
-        stepPerc -= pathStep;
-        // then feed data into curvePoint() to get current position
-        PVector basePos = detPath[pathStep];
-        PVector baseControl = detPath[max(pathStep-1, 0)];
-        PVector nextPos = detPath[pathNext];
-        PVector nextControl = detPath[min(pathNext+1, detPath.length-1)];
-        head.x = curvePoint(baseControl.x, basePos.x, nextPos.x, nextControl.x, stepPerc);
-        head.y = curvePoint(baseControl.y, basePos.y, nextPos.y, nextControl.y, stepPerc);
-        head.z = curvePoint(baseControl.z, basePos.z, nextPos.z, nextControl.z, stepPerc);
-        
-        // shrink linearly with detonation
-        head.r = P_RADIUS * (1 - beacon.detPerc);
-        
-        // continue colour-cycling points as they explode
-        head.h-= 5;
-        if (head.h < 0) {head.h += MAX_H;}
-        
-      } else { // business as usual
-        // particle updates faster the further away it is from beacon
-        float f = float(animFrame) / P_PERIOD;
-        f = easeCubic(f);
-        float radians = f * TWO_PI;
-        // position
-        head.x = (sin(radians - HALF_PI) * xAmp) + xAmp; // xPos moves between 0 & 2 * xAmp
-        head.y = sin(radians) * yAmp;
-        float yMod = (sin(radians - HALF_PI) + P_Y_MOD_CONST) * P_Y_MOD_AMP;
-        head.y *= yMod;
-        // simple colour cycle from R->B->G->R
-        head.h = (1 - f) * MAX_H;
+      if (beacon.isDetonating()) {
+        updateDetonation();
+      } else {
+        updateOrbit();
       }
-      
-      // simple spin for particle
       head.zRot = TWO_PI * (float(frameCount) / P_ROT_SPEED);
-      
-      // update trail
-      for (int i = 0; i < trail.length; i++) {
-        trail[i].decayRad();
-      }
-      // spawn new trail point if it's time
-      if (animFrame % P_TRAIL_FREQ == 0) {
-        for (int i = trail.length-1; i > 0; i--) {
-          trail[i] = trail[i-1];
-        }
-        trail[0] = new Point(head);
-      }
-      
+      updateTrail();
       animFrame++;
       if (animFrame >= P_PERIOD) {
         animFrame = 0;
       }
+    }
+  }
+
+  // particle curves along Catmull-Rom detonation path while beacon explodes
+  private void updateDetonation() {
+    float stepPerc = beacon.detonationPercent() * (detPath.length - 1);
+    int pathStep = int(stepPerc);
+    int pathNext = min(pathStep + 1, detPath.length - 1);
+    stepPerc -= pathStep;
+    PVector basePos = detPath[pathStep];
+    PVector baseControl = detPath[max(pathStep - 1, 0)];
+    PVector nextPos = detPath[pathNext];
+    PVector nextControl = detPath[min(pathNext + 1, detPath.length - 1)];
+    head.x = curvePoint(baseControl.x, basePos.x, nextPos.x, nextControl.x, stepPerc);
+    head.y = curvePoint(baseControl.y, basePos.y, nextPos.y, nextControl.y, stepPerc);
+    head.z = curvePoint(baseControl.z, basePos.z, nextPos.z, nextControl.z, stepPerc);
+    head.r = P_RADIUS * (1 - beacon.detonationPercent());
+    head.h -= 5;
+    if (head.h < 0) { head.h += MAX_H; }
+  }
+
+  // normal orbit around beacon core on a sine-wave path
+  private void updateOrbit() {
+    float f = float(animFrame) / P_PERIOD;
+    f = MathUtils.easeInOut(f, 3);
+    float radians = f * TWO_PI;
+    head.x = (sin(radians - HALF_PI) * xAmplitude) + xAmplitude;
+    head.y = sin(radians) * yAmplitude;
+    float yMod = (sin(radians - HALF_PI) + P_Y_MOD_CONST) * P_Y_MOD_AMP;
+    head.y *= yMod;
+    head.h = (1 - f) * MAX_H;
+  }
+
+  // decay existing trail points and spawn new ones on schedule
+  private void updateTrail() {
+    for (int i = 0; i < trail.length; i++) {
+      trail[i].decayRad();
+    }
+    if (animFrame % P_TRAIL_FREQ == 0) {
+      for (int i = trail.length - 1; i > 0; i--) {
+        trail[i] = trail[i - 1];
+      }
+      trail[0] = new Point(head);
     }
   }
   
@@ -137,17 +134,6 @@ public class Particle {
         detPath[i].y += random(P_DET_MIN_POS_MOD, P_DET_MAX_POS_MOD);
         detPath[i].z += random(P_DET_MIN_POS_MOD, P_DET_MAX_POS_MOD);
       }
-    }
-  }
-  
-  // cubic curve acceleration until half-way, then identical deceleration (returns 0 to 1)
-  float easeCubic (float perc) {
-    perc *= 2; // easy way to split anim percentage into 2 steps
-    if (perc < 1) {
-      return pow(perc, 3) / 2; // magic number 3 is for cubic (x^3)
-    } else {
-      perc--; // percentage into deceleration
-      return 1 - (pow(1-perc, 3) / 2);
     }
   }
   
